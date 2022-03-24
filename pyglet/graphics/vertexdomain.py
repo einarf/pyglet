@@ -447,14 +447,30 @@ class IndexedVertexDomain(VertexDomain):
                 OpenGL drawing mode, e.g. ``GL_POINTS``, ``GL_LINES``, etc.
 
         """
+        def print_buffer(buffer: BufferObject, dtype: str):
+            glBindBuffer(GL_ARRAY_BUFFER, buffer.id)
+            ptr = glMapBufferRange(GL_ARRAY_BUFFER, 0, buffer.size, GL_MAP_READ_BIT)
+            data = ctypes.string_at(ptr, size=buffer.size)
+            glUnmapBuffer(GL_ARRAY_BUFFER)
+            import struct
+            print(struct.unpack(f'{buffer.size // 4}{dtype}', data))
+
         self.vao.bind()
 
         for buffer, attributes in self.buffer_attributes:
+            print("Attributes in buffer", attributes)
+            print_buffer(buffer, 'f')
             buffer.bind()
             for attribute in attributes:
+                print("Binding attribute", attribute)
                 attribute.enable()
                 attribute.set_pointer(attribute.buffer.ptr)
+
+        print(self.index_buffer)
+        print("Index buffer:")
+        print_buffer(self.index_buffer, 'i')
         self.index_buffer.bind()
+        print(self)
 
         starts, sizes = self.index_allocator.get_allocated_regions()
         primcount = len(starts)
@@ -464,15 +480,18 @@ class IndexedVertexDomain(VertexDomain):
             # Common case
             glDrawElements(mode, sizes[0], self.index_gl_type,
                            self.index_buffer.ptr + starts[0] * self.index_element_size)
+            print(f"glDrawElements({mode}, {sizes[0]}, {self.index_gl_type}, {self.index_buffer.ptr} + {starts[0]} * {self.index_element_size})")
         else:
             starts = [s * self.index_element_size + self.index_buffer.ptr for s in starts]
             starts = (ctypes.POINTER(GLvoid) * primcount)(*(GLintptr * primcount)(*starts))
             sizes = (GLsizei * primcount)(*sizes)
             glMultiDrawElements(mode, sizes, self.index_gl_type, starts, primcount)
+            print(f"glMultiDrawElements({mode}, {sizes}, {self.index_gl_type}, {starts}, {primcount})")
 
         self.index_buffer.unbind()
         for buffer, _ in self.buffer_attributes:
             buffer.unbind()
+
 
     def draw_subset(self, mode, vertex_list):
         """Draw a specific IndexedVertexList in the domain.
